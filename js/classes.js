@@ -90,3 +90,35 @@ class Zombie{
             + "pv:" + this.life + " ";
     }
 }
+
+class Grave{
+    constructor(posX, posY, zombie, type){
+        this.posX = posX;
+        this.posY = posY;
+        this.type = type;
+        this.visibleHeight = 0;
+        this.shift = false;
+        this.opacity = 1;
+        this.ttl = 100;
+        this.zombie = zombie;
+    }
+
+    drawOnCtx(contexte, spritesheet){
+        contexte.globalAlpha = this.opacity;
+        contexte.drawImage(spritesheet,
+            32*(this.type%2),          //sprite X
+            32*(Math.floor(this.type/2)),         //sprite Y
+            32,         //sprite width
+            this.visibleHeight,         //sprite height
+            this.posX + 4*this.shift,  //display X
+            this.posY + (32-this.visibleHeight)*2,  //display Y
+            64,         //display width
+            this.visibleHeight*2          //display height
+        );
+        contexte.globalAlpha = 1;
+    }
+
+    toString(){
+        return "x:" + this.posX + ", y:" + this.posY;
+    }
+}

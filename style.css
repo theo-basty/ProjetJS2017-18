@@ -5,9 +5,14 @@ body
 
 canvas
 {
-    background: green;
+    background: white;
     padding: 0;
     margin: auto;
     display: block;
     width: 600px;
+}
+
+@font-face {
+    font-family: "dontmix";
+    src : url("dontmix.ttf");
 }
