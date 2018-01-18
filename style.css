@@ -10,6 +10,7 @@ canvas
     margin: auto;
     display: block;
     width: 600px;
+    cursor: none;
 }
 
 @font-face {
