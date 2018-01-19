@@ -1,6 +1,7 @@
 //Getting canvas and context
 let canvas = document.getElementById("main-cv");
 let context = canvas.getContext("2d");
+let decoratorLayer = document.getElementById("decorator").childNodes[1];
 //Defining variables containing game state
 let zombies = [];
 let graves = [];
@@ -19,7 +20,11 @@ let gameManagement = {
     lvl1Done: false,
     lvl2Done: false,
     bossDone: false,
-    zombieMaxLvl: 0
+    zombieMaxLvl: 0,
+    //game status 0:playing, 1:lose, 2:win
+    status: 0,
+    //remining time in sec
+    remainingTime: 0,
 };
 //player status
 let player = {
@@ -58,6 +63,11 @@ heartSprites.onload = function () {
     heartSprites.loaded = true;
     console.log("hearts sprites loaded");
 };
+//defining and loading sounds
+let shotVoid = new Audio("ressources/shot-null.wav");
+let shotHit = new Audio("ressources/shot-hit.wav");
+//defining a sound bank containing all playing sounds
+let soundBank = [];
 
 /**
  * function used to generate random integers in a range
@@ -83,6 +93,16 @@ function getRandomIntInclusive(min, max) {
 function render(remainingMinutes, remainingSeconds) {
     //clearing context
     context.clearRect(0, 0, 600, 800);
+
+    //add a night effect to the background during game
+    if(gameManagement.status === 0) {
+        context.fillStyle = "rgba(0, 0, 64, 0.3)";
+        context.fillRect(0, 0, 600, 800);
+    }
+
+    //add an end line
+    context.fillStyle = "#FF0000";
+    context.fillRect(0, 795, 600, 5);
 
     //rendering Graves
     for (let i = 0; i < graves.length; i++) {
@@ -151,7 +171,7 @@ function animateGraves() {
         else {
             //spawn zombie if not done yet
             if (graves[i].zombie != null) {
-                zombies.push(graves[i].zombie)
+                zombies.push(graves[i].zombie);
                 graves[i].zombie = null;
             }
             //checking if wait is over
@@ -227,30 +247,38 @@ function spawnZombies(boss = false) {
 
 //Defining click on canvas action
 canvas.onclick = function (event) {
-    //retrieving canvas' size
-    let rect = this.getBoundingClientRect();
-    //iterating the zombie in reverse order to only hit the front most zombie
-    for (i = zombies.length - 1; i >= 0; i--) {
-        //for each zombie, checking if the mouse is in the hitbox when clicked
-        if (zombies[i].isHit(event.clientX - rect.x, event.clientY - rect.y)) {
-            //reducing zombie's life
-            zombies[i].life -= 1;
-            //if no more life points, increase player's score and deleting zombie
-            if (zombies[i].life <= 0) {
-                player.score += zombies[i].points;
-                zombies.splice(i, 1);
+    // manage click event only if game status is playing
+    if(gameManagement.status === 0) {
+        //retrieving canvas' size
+        let rect = this.getBoundingClientRect();
+        //iterating the zombie in reverse order to only hit the front most zombie
+        for (i = zombies.length - 1; i >= 0; i--) {
+            //for each zombie, checking if the mouse is in the hitbox when clicked
+            if (zombies[i].isHit(event.clientX - rect.x, event.clientY - rect.y)) {
+                let newSound = shotHit.cloneNode();
+                newSound.play();
+                soundBank.push(newSound);
+                //reducing zombie's life
+                zombies[i].life -= 1;
+                //if no more life points, increase player's score and deleting zombie
+                if (zombies[i].life <= 0) {
+                    player.score += zombies[i].points;
+                    zombies.splice(i, 1);
+                }
+                //else setting damage frame state of the zombie to add a visual effect
+                else {
+                    zombies[i].damageFrame = 1;
+                    setTimeout(function (zombie) {
+                        zombie.damageFrame = 0;
+                    }, 200, zombies[i]);
+                }
+                //breaking the loop
+                return;
             }
-            //else setting damage frame state of the zombie to add a visual effect
-            else {
-                zombies[i].damageFrame = 1;
-                setTimeout(function (zombie) {
-                    zombie.damageFrame = 0;
-                }, 200, zombies[i]);
-            }
-            //breaking the loop
-            break;
         }
-
+        let newSound = shotVoid.cloneNode();
+        newSound.play();
+        soundBank.push(newSound);
     }
 };
 
@@ -268,7 +296,7 @@ function win() {
     context.fillStyle = "rgba(0, 128, 0, 0.3)";
     context.fillRect(0, 0, 600, 800);
     context.fillStyle = "#29c000";
-    context.strokeStyle = "#000000"
+    context.strokeStyle = "#000000";
     context.textAlign = "center";
 
     context.font = "80px dontmix";
@@ -324,16 +352,20 @@ function game(ts) {
         }
 
         //=====PERIODIC ACTIONS=====
-        //spawn new zombies
-        if (ts - startTs.createTs >= gameManagement.createPeriod) {
-            startTs.createTs += gameManagement.createPeriod;
-            spawnZombies();
+        if(gameManagement.status !== 2){ //continue to spawn zombies if user lost
+            //spawn new zombies
+            if (ts - startTs.createTs >= gameManagement.createPeriod) {
+                startTs.createTs += gameManagement.createPeriod;
+                spawnZombies();
+            }
         }
 
-        //launch a new move cycle
-        if (ts - startTs.moveZombieTs >= gameManagement.moveZombiePeriod) {
-            startTs.moveZombieTs += gameManagement.moveZombiePeriod;
-            moveZombies();
+        if(gameManagement.status !== 2) { //freeze zombies if user win
+            //launch a new move cycle
+            if (ts - startTs.moveZombieTs >= gameManagement.moveZombiePeriod) {
+                startTs.moveZombieTs += gameManagement.moveZombiePeriod;
+                moveZombies();
+            }
         }
 
         //animate graves
@@ -366,25 +398,46 @@ function game(ts) {
         }
 
         //=====OTHER ACTIONS=====
-        //calculating remaining time
-        let remainingTimeSec = Math.floor((gameManagement.endOfGame - ts + startTs.start) / 1000);
+        //calculating remaining time. Freezing it if game not playing
+        if(gameManagement.status === 0) {
+            gameManagement.remainingTime = Math.floor((gameManagement.endOfGame - ts + startTs.start) / 1000);
+        }
+        else if(gameManagement.status === 2){ //Setting it to 0 if player won
+            gameManagement.remainingTime = 0;
+        }
+
         //rendering terrain
-        render(Math.floor(remainingTimeSec / 60), remainingTimeSec % 60);
+        render(Math.floor(gameManagement.remainingTime / 60), gameManagement.remainingTime % 60);
+
+        //clearing sound bank
+        for (let i = 0; i < soundBank.length; i++){
+            if(soundBank[i].paused){
+                soundBank.splice(i, 1);
+            }
+        }
 
         //checking win conditions
         if (ts - startTs.start >= gameManagement.endOfGame) {
-            console.log("WIN !");
-            //draw screen and stop game
+            //draw win screen and update game status
+            gameManagement.status = 2;
+            if(decoratorLayer.className !== "win"){
+                decoratorLayer.className = "win";
+            }
             win();
-            return;
         }
-
         //checking loose conditions
-        if (player.pv <= 0) {
-            console.log("LOST !");
-            //draw screen and stop game
+        else if (player.pv <= 0) {
+            //draw loose screen and update game status
+            gameManagement.status = 1;
+            if(decoratorLayer.className !== "lost"){
+                decoratorLayer.className = "lost";
+            }
             loose();
-            return;
+        }
+        //clear game status
+        else {
+            gameManagement.status = 0;
+            decoratorLayer.className = "";
         }
     }
     //ask for the next frame
