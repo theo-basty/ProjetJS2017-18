@@ -66,6 +66,7 @@ heartSprites.onload = function () {
 //defining and loading sounds
 let shotVoid = new Audio("ressources/shot-null.wav");
 let shotHit = new Audio("ressources/shot-hit.wav");
+let bossSpawn = new Audio("ressources/boss-spawn.wav");
 //defining a sound bank containing all playing sounds
 let soundBank = [];
 
@@ -172,6 +173,9 @@ function animateGraves() {
             //spawn zombie if not done yet
             if (graves[i].zombie != null) {
                 zombies.push(graves[i].zombie);
+                if(graves[i].zombie.level === 3){
+                    bossSpawn.play();
+                }
                 graves[i].zombie = null;
             }
             //checking if wait is over
